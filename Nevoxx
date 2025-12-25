@@ -1,8 +1,8 @@
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Scripting137/Nevox/refs/heads/main/Ui"))()
 
 local Window = Library:Window({
-    Name = "Nevox BBR",
-    SubName = "V16 FIXED - NO FLICKER",
+    Name = "Nevox - Madness.idkwww",
+    SubName = "Booga Booga Reborn",
     Logo = "120959262762131"
 })
 
@@ -208,7 +208,7 @@ local hheighttoggle = PlayerSection:Toggle({
 local hheightslider = PlayerSection:Slider({
     Name = "HipHeight Value",
     Min = 0.1,
-    Max = 10,
+    Max = 500,
     Suffix = "studs",
     Default = 2,
     Decimals = 1,
