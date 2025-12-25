@@ -1,9 +1,8 @@
--- Library Setup
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Scripting137/Nevox/refs/heads/main/Ui"))()
 
 local Window = Library:Window({
-    Name = "Nevox - Madness.idk",
-    SubName = "Booga Booga Reborn",
+    Name = "Nevox BBR",
+    SubName = "V16 FIXED - NO FLICKER",
     Logo = "120959262762131"
 })
 
@@ -20,6 +19,19 @@ local uis = game:GetService("UserInputService")
 local tspmo = game:GetService("TweenService")
 local pathService = game:GetService("PathfindingService")
 
+-- Categories & Pages
+Window:Category("Main Features")
+local MainPage = Window:Page({Name = "Main", Icon = "134236649319095"})
+local CombatPage = Window:Page({Name = "Combat", Icon = "100050851789190"})
+local PickupPage = Window:Page({Name = "Pickup", Icon = "108839695397679"})
+local FarmingPage = Window:Page({Name = "Farming", Icon = "123554105934637"})
+
+Window:Category("Visual")
+local ESPPage = Window:Page({Name = "ESP", Icon = "138827881557940", Columns = 2})
+
+Window:Category("Utilities & Settings")
+local SettingsPage = Library:CreateSettingsPage(Window)
+
 -- Variables
 local originalValues = {
     WalkSpeed = hum.WalkSpeed,
@@ -27,11 +39,6 @@ local originalValues = {
     HipHeight = hum.HipHeight,
     MaxSlopeAngle = hum.MaxSlopeAngle
 }
-
--- Door Utility Variables
-local hiddenDoors = {}
-local delHut = false
-local delGate = false
 
 -- Double Jump
 local canDoubleJump = false
@@ -83,6 +90,12 @@ local tweenBushEnabled = false
 local tweenRange = 250
 local currentTween = nil
 local tweenSpeed = 15 -- Slower speed to avoid anti-cheat
+
+-- Gold Farm
+local goldFarmEnabled = false
+local goldFarmRange = 100
+local currentIceNode = nil
+local miningGold = false
 
 -- Resource/Critter Aura
 local resourceAuraEnabled = false
@@ -143,133 +156,8 @@ local fruitToItemId = {
     Cloudfruit = 514
 }
 
--- Categories & Pages
-Window:Category("Main Features")
-local MainPage = Window:Page({Name = "Main", Icon = "134236649319095"})
-local CombatPage = Window:Page({Name = "Combat", Icon = "100050851789190"})
-local PickupPage = Window:Page({Name = "Pickup", Icon = "108839695397679"})
-local FarmingPage = Window:Page({Name = "Farming", Icon = "123554105934637"})
-
-Window:Category("Visual")
-local ESPPage = Window:Page({Name = "ESP", Icon = "138827881557940", Columns = 2})
-
-Window:Category("Utilities & Settings")
-local SettingsPage = Library:CreateSettingsPage(Window)
-
--- =================== DOOR UTILITY FUNCTIONS ===================
--- [[ CORE DOOR FUNCTION ]] --
-local function ProcessDoors(filter, shouldHide)
-    local deployables = workspace:FindFirstChild("Deployables")
-    if not deployables then return end
-
-    if shouldHide then
-        for _, item in ipairs(deployables:GetChildren()) do
-            if item.Name:find(filter) then
-                local door = item:FindFirstChild("Door")
-                if door then
-                    hiddenDoors[door] = item
-                    door.Parent = nil
-                end
-            end
-        end
-    else
-        for door, parent in pairs(hiddenDoors) do
-            if parent and parent.Name:find(filter) then
-                door.Parent = parent
-                hiddenDoors[door] = nil
-            end
-        end
-    end
-end
-
--- =================== PLAYER STATS FUNCTIONS ===================
-local walkConn, jumpConn, hipConn, slopeConn
-
-local function updateWalkspeed(enabled)
-    if walkConn then walkConn:Disconnect() end
-    if enabled then
-        hum.WalkSpeed = wsslider:Get()
-        walkConn = runs.RenderStepped:Connect(function() 
-            if hum and hum.Parent then
-                hum.WalkSpeed = wsslider:Get() 
-            end
-        end)
-    else
-        hum.WalkSpeed = originalValues.WalkSpeed
-    end
-end
-
-local function updateJumpPower(enabled)
-    if jumpConn then jumpConn:Disconnect() end
-    if enabled then
-        hum.JumpPower = jpslider:Get()
-        jumpConn = runs.RenderStepped:Connect(function() 
-            if hum and hum.Parent then
-                hum.JumpPower = jpslider:Get() 
-            end
-        end)
-    else
-        hum.JumpPower = originalValues.JumpPower
-    end
-end
-
-local function updateHipHeight(enabled)
-    if hipConn then hipConn:Disconnect() end
-    if enabled then
-        hum.HipHeight = hheightslider:Get()
-        hipConn = runs.RenderStepped:Connect(function() 
-            if hum and hum.Parent then
-                hum.HipHeight = hheightslider:Get() 
-            end
-        end)
-    else
-        hum.HipHeight = originalValues.HipHeight
-    end
-end
-
-local function updateNoSlip(enabled)
-    if slopeConn then slopeConn:Disconnect() end
-    if enabled then
-        hum.MaxSlopeAngle = 89.9
-        slopeConn = runs.RenderStepped:Connect(function() 
-            if hum and hum.Parent then
-                hum.MaxSlopeAngle = 89.9 
-            end
-        end)
-    else
-        hum.MaxSlopeAngle = originalValues.MaxSlopeAngle
-    end
-end
-
-local function updateDoubleJump(enabled)
-    for _, c in pairs(doubleJumpConnections) do c:Disconnect() end
-    doubleJumpConnections = {}
-    
-    if enabled then
-        local ground = runs.RenderStepped:Connect(function()
-            if hum and hum.Parent and hum.FloorMaterial ~= Enum.Material.Air then 
-                hasDoubleJumped = false 
-                canDoubleJump = true 
-            end
-        end)
-        
-        local input = uis.InputBegan:Connect(function(inp, gp)
-            if gp then return end
-            if hum and hum.Parent and inp.KeyCode == Enum.KeyCode.Space and hum.FloorMaterial == Enum.Material.Air and canDoubleJump and not hasDoubleJumped then
-                local currentVelocity = root.Velocity
-                root.Velocity = Vector3.new(currentVelocity.X, jpslider:Get(), currentVelocity.Z)
-                hasDoubleJumped = true
-                canDoubleJump = false
-            end
-        end)
-        
-        table.insert(doubleJumpConnections, ground)
-        table.insert(doubleJumpConnections, input)
-    end
-end
-
 -- =================== MAIN PAGE ===================
-local PlayerSection = MainPage:Section({Name = "Player  ", Side = 1})
+local PlayerSection = MainPage:Section({Name = "Player Stats", Side = 1})
 
 local wstoggle = PlayerSection:Toggle({
     Name = "Walkspeed",
@@ -341,28 +229,6 @@ local doublejumptoggle = PlayerSection:Toggle({
     Name = "Double Jump",
     Default = false,
     Callback = function(v) updateDoubleJump(v) end
-})
-
--- Structure Manipulation Section moved to Main Page
-local StructureSection = MainPage:Section({Name = "Door Shit", Side = 2})
-
--- [[ UI TOGGLES ]] --
-StructureSection:Toggle({
-    Name = "Delete Hut Doors",
-    Default = false,
-    Callback = function(v)
-        delHut = v
-        ProcessDoors("Hut", v)
-    end
-})
-
-StructureSection:Toggle({
-    Name = "Delete Gate Doors",
-    Default = false,
-    Callback = function(v)
-        delGate = v
-        ProcessDoors("Gate", v)
-    end
 })
 
 local UtilitySection = MainPage:Section({Name = "Utilities", Side = 2})
@@ -618,7 +484,7 @@ local harvestrangeslider = FarmingSection:Slider({
 })
 
 -- Tween Farming
-local TweenSection = FarmingPage:Section({Name = "PlantBox Shit", Side = 2})
+local TweenSection = FarmingPage:Section({Name = "Tween Farming", Side = 2})
 
 local tweenplantboxtoggle = TweenSection:Toggle({
     Name = "Tween to Plant Box",
@@ -662,6 +528,33 @@ local tweenSpeedSlider = TweenSection:Slider({
     Default = 15,
     Decimals = 1,
     Callback = function(v) tweenSpeed = v end
+})
+
+-- Gold Farm Section
+local GoldFarmSection = FarmingPage:Section({Name = "Gold Farm", Side = 2})
+
+local goldfarmtoggle = GoldFarmSection:Toggle({
+    Name = "Auto Gold Farm",
+    Default = false,
+    Callback = function(v) 
+        goldFarmEnabled = v
+        if currentTween then
+            currentTween:Cancel()
+            currentTween = nil
+        end
+        miningGold = false
+        currentIceNode = nil
+    end
+})
+
+local goldfarmrangeslider = GoldFarmSection:Slider({
+    Name = "Gold Farm Range",
+    Min = 50,
+    Max = 500,
+    Suffix = "studs",
+    Default = 100,
+    Decimals = 1,
+    Callback = function(v) goldFarmRange = v end
 })
 
 -- Resource/Critter Aura Section
@@ -1015,8 +908,94 @@ local function getInventoryItem(itemName)
     return nil
 end
 
+-- =================== PLAYER STATS FUNCTIONS ===================
+local walkConn, jumpConn, hipConn, slopeConn
+
+function updateWalkspeed(enabled)
+    if walkConn then walkConn:Disconnect() end
+    if enabled then
+        hum.WalkSpeed = wsslider:Get()
+        walkConn = runs.RenderStepped:Connect(function() 
+            if hum and hum.Parent then
+                hum.WalkSpeed = wsslider:Get() 
+            end
+        end)
+    else
+        hum.WalkSpeed = originalValues.WalkSpeed
+    end
+end
+
+function updateJumpPower(enabled)
+    if jumpConn then jumpConn:Disconnect() end
+    if enabled then
+        hum.JumpPower = jpslider:Get()
+        jumpConn = runs.RenderStepped:Connect(function() 
+            if hum and hum.Parent then
+                hum.JumpPower = jpslider:Get() 
+            end
+        end)
+    else
+        hum.JumpPower = originalValues.JumpPower
+    end
+end
+
+function updateHipHeight(enabled)
+    if hipConn then hipConn:Disconnect() end
+    if enabled then
+        hum.HipHeight = hheightslider:Get()
+        hipConn = runs.RenderStepped:Connect(function() 
+            if hum and hum.Parent then
+                hum.HipHeight = hheightslider:Get() 
+            end
+        end)
+    else
+        hum.HipHeight = originalValues.HipHeight
+    end
+end
+
+function updateNoSlip(enabled)
+    if slopeConn then slopeConn:Disconnect() end
+    if enabled then
+        hum.MaxSlopeAngle = 89.9
+        slopeConn = runs.RenderStepped:Connect(function() 
+            if hum and hum.Parent then
+                hum.MaxSlopeAngle = 89.9 
+            end
+        end)
+    else
+        hum.MaxSlopeAngle = originalValues.MaxSlopeAngle
+    end
+end
+
+function updateDoubleJump(enabled)
+    for _, c in pairs(doubleJumpConnections) do c:Disconnect() end
+    doubleJumpConnections = {}
+    
+    if enabled then
+        local ground = runs.RenderStepped:Connect(function()
+            if hum and hum.Parent and hum.FloorMaterial ~= Enum.Material.Air then 
+                hasDoubleJumped = false 
+                canDoubleJump = true 
+            end
+        end)
+        
+        local input = uis.InputBegan:Connect(function(inp, gp)
+            if gp then return end
+            if hum and hum.Parent and inp.KeyCode == Enum.KeyCode.Space and hum.FloorMaterial == Enum.Material.Air and canDoubleJump and not hasDoubleJumped then
+                local currentVelocity = root.Velocity
+                root.Velocity = Vector3.new(currentVelocity.X, jpslider:Get(), currentVelocity.Z)
+                hasDoubleJumped = true
+                canDoubleJump = false
+            end
+        end)
+        
+        table.insert(doubleJumpConnections, ground)
+        table.insert(doubleJumpConnections, input)
+    end
+end
+
 -- =================== PLAYER ESP FUNCTIONS ===================
-local function createPlayerESP(p)
+function createPlayerESP(p)
     if p == plr then return end
     
     local bgui = Instance.new("BillboardGui", game.CoreGui)
@@ -1098,7 +1077,7 @@ local function createPlayerESP(p)
     end)
 end
 
-local function createESPForAllPlayers()
+function createESPForAllPlayers()
     for _, p in pairs(game.Players:GetPlayers()) do
         if p ~= plr then
             createPlayerESP(p)
@@ -1106,7 +1085,7 @@ local function createESPForAllPlayers()
     end
 end
 
-local function clearESP()
+function clearESP()
     for _, p in pairs(game.Players:GetPlayers()) do
         if p ~= plr then
             local esp = game.CoreGui:FindFirstChild(p.Name .. "_PlayerESP")
@@ -1156,6 +1135,48 @@ local function ApplyESP(obj, text, color, visible, showStuds)
     end
 end
 
+-- Using Heartbeat for the check logic (YOUR OLD CODE)
+RunService.Heartbeat:Connect(function()
+    if not root then return end
+
+    -- 1. ITEMS ESP
+    local items = workspace:FindFirstChild("Items")
+    if items then
+        for _, item in ipairs(items:GetChildren()) do
+            local d = (item:GetPivot().Position - root.Position).Magnitude
+            local active = WorldESP.Items.Enabled and d <= WorldESP.Items.Range and (WorldESP.Items.All or WorldESP.Items.Filter[item.Name])
+            ApplyESP(item, item.Name, Color3.fromRGB(255, 255, 255), active, false)
+        end
+    end
+
+    -- 2. CRITTERS ESP
+    local critters = workspace:FindFirstChild("Critters")
+    if critters then
+        for _, crit in ipairs(critters:GetChildren()) do
+            local d = (crit:GetPivot().Position - root.Position).Magnitude
+            local isAnt = string.find(crit.Name, "Ant")
+            local isShelly = string.find(crit.Name, "Shelly")
+            local match = WorldESP.Critters.All or WorldESP.Critters.Filter[crit.Name] or (WorldESP.Critters.Filter["Ants"] and isAnt) or (WorldESP.Critters.Filter["Shelly"] and isShelly)
+            local active = WorldESP.Critters.Enabled and d <= WorldESP.Critters.Range and match
+            ApplyESP(crit, crit.Name, Color3.fromRGB(0, 255, 255), active, false)
+        end
+    end
+
+    -- 3. RESOURCES ESP
+    local resources = workspace:FindFirstChild("Resources")
+    if resources then
+        for _, node in ipairs(resources:GetChildren()) do
+            local d = (node:GetPivot().Position - root.Position).Magnitude
+            local isGod = string.find(string.lower(node.Name), "god")
+            local match = WorldESP.Resources.All or WorldESP.Resources.Filter[node.Name] or (WorldESP.Resources.Gods and isGod)
+            local active = WorldESP.Resources.Enabled and d <= WorldESP.Resources.Range and match
+            
+            local col = (isGod or string.find(node.Name, "Gold")) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(0, 255, 0)
+            ApplyESP(node, node.Name, col, active, true)
+        end
+    end
+end)
+
 -- =================== TWEEN FUNCTIONS ===================
 local function safeTween(targetPosition)
     if currentTween then
@@ -1192,7 +1213,7 @@ local function safeTween(targetPosition)
                 currentTween:Play()
                 currentTween.Completed:Wait()
                 
-                if not tweenPlantBoxEnabled and not tweenBushEnabled then
+                if not tweenPlantBoxEnabled and not tweenBushEnabled and not goldFarmEnabled then
                     break
                 end
             end
@@ -1244,6 +1265,38 @@ local function getBushes(range, fruitname)
         end
     end
     return bushes
+end
+
+local function getIceChunks(range)
+    local iceChunks = {}
+    for _, resource in ipairs(workspace.Resources:GetChildren()) do
+        if resource:IsA("Model") and string.find(string.lower(resource.Name), "ice chunk") then
+            local ppart = resource.PrimaryPart or resource:FindFirstChildWhichIsA("BasePart")
+            if ppart then
+                local dist = (ppart.Position - root.Position).Magnitude
+                if dist <= range then
+                    table.insert(iceChunks, { model = resource, dist = dist, position = ppart.Position })
+                end
+            end
+        end
+    end
+    return iceChunks
+end
+
+local function getGoldNodes(range)
+    local goldNodes = {}
+    for _, node in ipairs(workspace:GetChildren()) do
+        if node:IsA("Model") and node.Name == "Gold Node" then
+            local ppart = node.PrimaryPart or node:FindFirstChildWhichIsA("BasePart")
+            if ppart then
+                local dist = (ppart.Position - root.Position).Magnitude
+                if dist <= range then
+                    table.insert(goldNodes, { model = node, dist = dist, position = ppart.Position })
+                end
+            end
+        end
+    end
+    return goldNodes
 end
 
 -- =================== MAIN LOOPS ===================
@@ -1541,53 +1594,51 @@ task.spawn(function()
     end
 end)
 
--- Door Utility Auto-Delete Loop
+-- Gold Farm Loop
 task.spawn(function()
-    while task.wait(1) do
-        if delHut then ProcessDoors("Hut", true) end
-        if delGate then ProcessDoors("Gate", true) end
-    end
-end)
-
--- Using Heartbeat for the check logic (YOUR OLD ESP CODE)
-RunService.Heartbeat:Connect(function()
-    if not root then return end
-
-    -- 1. ITEMS ESP
-    local items = workspace:FindFirstChild("Items")
-    if items then
-        for _, item in ipairs(items:GetChildren()) do
-            local d = (item:GetPivot().Position - root.Position).Magnitude
-            local active = WorldESP.Items.Enabled and d <= WorldESP.Items.Range and (WorldESP.Items.All or WorldESP.Items.Filter[item.Name])
-            ApplyESP(item, item.Name, Color3.fromRGB(255, 255, 255), active, false)
+    while true do
+        if goldFarmEnabled then
+            if not miningGold then
+                -- Look for ice chunks
+                local iceChunks = getIceChunks(goldFarmRange)
+                table.sort(iceChunks, function(a, b) return a.dist < b.dist end)
+                
+                if #iceChunks > 0 then
+                    currentIceNode = iceChunks[1]
+                    safeTween(currentIceNode.position + Vector3.new(0, 5, 0))
+                    miningGold = true
+                else
+                    -- Look for gold nodes
+                    local goldNodes = getGoldNodes(goldFarmRange)
+                    table.sort(goldNodes, function(a, b) return a.dist < b.dist end)
+                    
+                    if #goldNodes > 0 then
+                        safeTween(goldNodes[1].position + Vector3.new(0, 5, 0))
+                        task.wait(1)
+                    end
+                end
+            else
+                -- We're at an ice chunk, break it
+                if currentIceNode and currentIceNode.model.Parent then
+                    -- Find entity ID to break it
+                    local entityId = currentIceNode.model:GetAttribute("EntityID")
+                    if entityId then
+                        swingTool({entityId})
+                        task.wait(1)
+                        
+                        -- Check for gold node
+                        local goldNodes = getGoldNodes(20)
+                        if #goldNodes > 0 then
+                            safeTween(goldNodes[1].position + Vector3.new(0, 5, 0))
+                            task.wait(1)
+                        end
+                    end
+                end
+                miningGold = false
+                currentIceNode = nil
+            end
         end
-    end
-
-    -- 2. CRITTERS ESP
-    local critters = workspace:FindFirstChild("Critters")
-    if critters then
-        for _, crit in ipairs(critters:GetChildren()) do
-            local d = (crit:GetPivot().Position - root.Position).Magnitude
-            local isAnt = string.find(crit.Name, "Ant")
-            local isShelly = string.find(crit.Name, "Shelly")
-            local match = WorldESP.Critters.All or WorldESP.Critters.Filter[crit.Name] or (WorldESP.Critters.Filter["Ants"] and isAnt) or (WorldESP.Critters.Filter["Shelly"] and isShelly)
-            local active = WorldESP.Critters.Enabled and d <= WorldESP.Critters.Range and match
-            ApplyESP(crit, crit.Name, Color3.fromRGB(0, 255, 255), active, false)
-        end
-    end
-
-    -- 3. RESOURCES ESP
-    local resources = workspace:FindFirstChild("Resources")
-    if resources then
-        for _, node in ipairs(resources:GetChildren()) do
-            local d = (node:GetPivot().Position - root.Position).Magnitude
-            local isGod = string.find(string.lower(node.Name), "god")
-            local match = WorldESP.Resources.All or WorldESP.Resources.Filter[node.Name] or (WorldESP.Resources.Gods and isGod)
-            local active = WorldESP.Resources.Enabled and d <= WorldESP.Resources.Range and match
-            
-            local col = (isGod or string.find(node.Name, "Gold")) and Color3.fromRGB(255, 215, 0) or Color3.fromRGB(0, 255, 0)
-            ApplyESP(node, node.Name, col, active, true)
-        end
+        task.wait(0.5)
     end
 end)
 
