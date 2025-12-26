@@ -1,7 +1,7 @@
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Scripting137/Nevox/refs/heads/main/Ui"))()
 
 local Window = Library:Window({
-    Name = "Nevox - Madness.idkwww",
+    Name = "Nevox - Madness.idk",
     SubName = "Booga Booga Reborn",
     Logo = "120959262762131"
 })
@@ -18,8 +18,68 @@ local RunService = game:GetService("RunService")
 local uis = game:GetService("UserInputService")
 local tspmo = game:GetService("TweenService")
 local pathService = game:GetService("PathfindingService")
+local teams = game:GetService("Teams")
+local players = game:GetService("Players")
 
--- Categories & Pages
+-- [[ OMNITRAP VARIABLES ]] --
+local hutToggle = false
+local hiddenDoors = {}
+
+-- [[ REMOTE FINDER FOR HUT PLACEMENT ]] --
+local PlaceEvent = rs:FindFirstChild("PlaceStructure", true) or (rs:FindFirstChild("Events") and rs.Events:FindFirstChild("PlaceStructure"))
+
+-- [[ TEAM-BASED ENEMY CHECK ]] --
+local function IsEnemy(target)
+    if not target or target == plr then return false end
+    if plr.Neutral then return true end
+    if plr.Team ~= target.Team then return true end
+    return false
+end
+
+-- [[ PLACEMENT FUNCTION ]] --
+local function PlaceStructure(name, pos)
+    local data = {
+        ["buildingName"] = name,
+        ["vec"] = pos,
+        ["cframe"] = CFrame.new(pos),
+        ["yrot"] = math.random(0, 360),
+        ["cursor"] = {["Hit"] = {["p"] = pos}, ["Target"] = workspace.Terrain},
+        ["isMobile"] = false
+    }
+    if packets and packets.PlaceStructure then 
+        packets.PlaceStructure.send(data)
+    elseif PlaceEvent then
+        PlaceEvent:FireServer(data) 
+        PlaceEvent:FireServer(204, data) 
+    end
+end
+
+-- [[ DOOR MANIPULATION ]] --
+local function HandleDoors(filter, shouldHide)
+    local dep = workspace:FindFirstChild("Deployables")
+    if not dep then return end
+    
+    if shouldHide then
+        for _, item in ipairs(dep:GetChildren()) do
+            if item.Name:find(filter) then
+                local door = item:FindFirstChild("Door")
+                if door then 
+                    hiddenDoors[door] = item
+                    door.Parent = nil 
+                end
+            end
+        end
+    else
+        for door, originalParent in pairs(hiddenDoors) do
+            if originalParent and originalParent.Name:find(filter) then
+                door.Parent = originalParent
+                hiddenDoors[door] = nil
+            end
+        end
+    end
+end
+
+-- =================== UI SETUP ===================
 Window:Category("Main Features")
 local MainPage = Window:Page({Name = "Main", Icon = "134236649319095"})
 local CombatPage = Window:Page({Name = "Combat", Icon = "100050851789190"})
@@ -32,7 +92,96 @@ local ESPPage = Window:Page({Name = "ESP", Icon = "138827881557940", Columns = 2
 Window:Category("Utilities & Settings")
 local SettingsPage = Library:CreateSettingsPage(Window)
 
--- Variables
+-- =================== OMNITRAP SECTION ===================
+local OmniSection = CombatPage:Section({Name = "Trapping", Side = 1})
+
+OmniSection:Toggle({
+    Name = "Auto Hut",
+    Flag = "AutoHut",
+    Callback = function(v) 
+        hutToggle = v 
+        if not v then
+            -- Reset any ongoing hut placement
+        end
+    end
+})
+
+local DoorSection = MainPage:Section({Name = "Doors", Side = 2})
+
+DoorSection:Toggle({
+    Name = "Remove Hut Doors", 
+    Flag = "HutDoorDel", 
+    Callback = function(v) 
+        HandleDoors("Hut", v) 
+    end
+})
+
+DoorSection:Toggle({
+    Name = "Remove Gate Doors", 
+    Flag = "GateDoorDel", 
+    Callback = function(v) 
+        HandleDoors("Gate", v) 
+    end
+})
+
+-- =================== OMNITRAP LOGIC ===================
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        if hutToggle and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+            for _, v in ipairs(players:GetPlayers()) do
+                if v ~= plr and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
+                    
+                    if IsEnemy(v) then
+                        local eRoot = v.Character.HumanoidRootPart
+                        local dist = (eRoot.Position - plr.Character.HumanoidRootPart.Position).Magnitude
+                        
+                        if dist < 50 then
+                            local p = eRoot.Position
+                            local radius = 9
+                            
+                            -- Generate 8 points in a circle (45 degrees apart)
+                            for i = 1, 8 do
+                                if not hutToggle then break end
+                                
+                                local angle = math.rad(i * 45)
+                                local xOffset = math.cos(angle) * radius
+                                local zOffset = math.sin(angle) * radius
+                                
+                                -- Add slight prediction if they are moving
+                                local velocity = eRoot.Velocity * 0.2
+                                local finalPos = p + Vector3.new(xOffset, -2.5, zOffset) + velocity
+                                
+                                PlaceStructure("Big Ol' Hut", finalPos)
+                                task.wait(0.02)
+                            end
+                            task.wait(1.8)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- Auto-Remove New Doors
+task.spawn(function()
+    local dep = workspace:WaitForChild("Deployables")
+    dep.ChildAdded:Connect(function(child)
+        task.wait(0.1)
+        if child:IsA("Model") then
+            if child.Name:find("Hut") and Library.Flags["HutDoorDel"] then
+                local d = child:FindFirstChild("Door")
+                if d then d.Parent = nil end
+            elseif child.Name:find("Gate") and Library.Flags["GateDoorDel"] then
+                local d = child:FindFirstChild("Door")
+                if d then d.Parent = nil end
+            end
+        end
+    end)
+end)
+
+-- =================== ORIGINAL VARIABLES ===================
 local originalValues = {
     WalkSpeed = hum.WalkSpeed,
     JumpPower = hum.JumpPower,
@@ -89,7 +238,7 @@ local tweenPlantBoxEnabled = false
 local tweenBushEnabled = false
 local tweenRange = 250
 local currentTween = nil
-local tweenSpeed = 15 -- Slower speed to avoid anti-cheat
+local tweenSpeed = 15
 
 -- Gold Farm
 local goldFarmEnabled = false
@@ -115,14 +264,14 @@ local espShowArmor = true
 local espShowWeapon = true
 local espMaxDistance = 2500
 
--- World ESP Settings (KEEPING YOUR OLD SETTINGS STRUCTURE)
+-- World ESP Settings
 local WorldESP = {
     Items = {Enabled = false, Range = 500, Filter = {}, All = false},
     Critters = {Enabled = false, Range = 1000, Filter = {}, All = false},
     Resources = {Enabled = false, Range = 5000, Filter = {}, All = false, Gods = false}
 }
 
--- All Items List (for both pickup and ESP)
+-- All Items List
 local allItems = {
     "ALL ITEMS",
     "Wood", "Log", "Stone", "Iron", "Gold", "Bloodfruit", "Bluefruit", "Lemon", "Strawberry", 
@@ -250,7 +399,7 @@ UtilitySection:Button({
 })
 
 -- =================== COMBAT PAGE ===================
-local CombatSection = CombatPage:Section({Name = "Kill Aura", Side = 1})
+local CombatSection = CombatPage:Section({Name = "Kill Aura", Side = 2})
 
 local kauratoggle = CombatSection:Toggle({
     Name = "Kill Aura",
@@ -368,7 +517,6 @@ local pickuprangeslider = PickupSection:Slider({
     Callback = function(v) pickupRange = v end
 })
 
--- FIXED: Correct dropdown implementation
 local itemdropdown = PickupSection:Dropdown({
     Name = "Items to Pickup",
     Items = allItems,
@@ -389,7 +537,6 @@ local itemdropdown = PickupSection:Dropdown({
     end
 })
 
--- Custom Pickup
 local custompickuptoggle = PickupSection:Toggle({
     Name = "Custom Item Pickup",
     Default = false,
@@ -627,7 +774,6 @@ local crittercooldown = ResourceSection:Slider({
 })
 
 -- =================== ESP PAGE ===================
--- Player ESP Section
 local PlayerESPSection = ESPPage:Section({Name = "Player ESP", Side = 1})
 
 local playeresptoggle = PlayerESPSection:Toggle({
@@ -671,7 +817,7 @@ local esprange = PlayerESPSection:Slider({
     Callback = function(v) espMaxDistance = v end
 })
 
--- World Items ESP Section (USING YOUR OLD ESP CODE)
+-- World Items ESP Section
 local WorldItemsSection = ESPPage:Section({Name = "Dropped Items ESP", Side = 1})
 
 WorldItemsSection:Toggle({
@@ -1094,7 +1240,7 @@ function clearESP()
     end
 end
 
--- =================== WORLD ESP FUNCTIONS (YOUR OLD CODE) ===================
+-- =================== WORLD ESP FUNCTIONS ===================
 local function ApplyESP(obj, text, color, visible, showStuds)
     local esp = obj:FindFirstChild("NevoxESP")
     
@@ -1123,19 +1269,17 @@ local function ApplyESP(obj, text, color, visible, showStuds)
             str = text .. "\n[" .. dist .. "m]"
         end
         
-        -- Only update text if it actually changed to prevent flickering
         if esp.TextLabel.Text ~= str then
             esp.TextLabel.Text = str
         end
         esp.Enabled = true
     else
         if esp then
-            esp:Destroy() -- Use Destroy here to fully clean up when toggled off
+            esp:Destroy()
         end
     end
 end
 
--- Using Heartbeat for the check logic (YOUR OLD CODE)
 RunService.Heartbeat:Connect(function()
     if not root then return end
 
@@ -1193,7 +1337,6 @@ local function safeTween(targetPosition)
     local raycastResult = workspace:Raycast(root.Position, direction * distance, params)
     
     if raycastResult then
-        -- Obstacle detected, use pathfinding
         local path = pathService:CreatePath()
         path:ComputeAsync(root.Position, targetPosition)
         
@@ -1218,13 +1361,11 @@ local function safeTween(targetPosition)
                 end
             end
         else
-            -- If pathfinding fails, use direct tween but with obstacle avoidance
             local tweenInfo = TweenInfo.new(distance / tweenSpeed, Enum.EasingStyle.Linear)
             currentTween = tspmo:Create(root, tweenInfo, {CFrame = CFrame.new(targetPosition)})
             currentTween:Play()
         end
     else
-        -- No obstacles, direct tween
         local tweenInfo = TweenInfo.new(distance / tweenSpeed, Enum.EasingStyle.Linear)
         currentTween = tspmo:Create(root, tweenInfo, {CFrame = CFrame.new(targetPosition)})
         currentTween:Play()
@@ -1300,7 +1441,7 @@ local function getGoldNodes(range)
 end
 
 -- =================== MAIN LOOPS ===================
--- Auto Pickup Loop (FIXED - Now uses correct dropdown implementation)
+-- Auto Pickup Loop
 task.spawn(function()
     while true do
         if autoPickupEnabled and root then
@@ -1309,15 +1450,12 @@ task.spawn(function()
                 for _, item in ipairs(itemsFolder:GetChildren()) do
                     local shouldPick = false
                     
-                    -- Check if "ALL ITEMS" is selected
                     if PickAllMode then
                         shouldPick = true
-                    -- Otherwise check individual selection
                     elseif selectedItems[item.Name] then
                         shouldPick = true
                     end
                     
-                    -- Custom Pickup (works independently)
                     if customPickupEnabled and customPickupText ~= "" then
                         if string.find(string.lower(item.Name), string.lower(customPickupText)) then
                             shouldPick = true
@@ -1341,7 +1479,6 @@ task.spawn(function()
                 end
             end
             
-            -- Chest Pickup
             if chestPickupEnabled then
                 for _, chest in ipairs(workspace.Deployables:GetChildren()) do
                     if chest:IsA("Model") and chest:FindFirstChild("Contents") then
@@ -1599,7 +1736,6 @@ task.spawn(function()
     while true do
         if goldFarmEnabled then
             if not miningGold then
-                -- Look for ice chunks
                 local iceChunks = getIceChunks(goldFarmRange)
                 table.sort(iceChunks, function(a, b) return a.dist < b.dist end)
                 
@@ -1608,7 +1744,6 @@ task.spawn(function()
                     safeTween(currentIceNode.position + Vector3.new(0, 5, 0))
                     miningGold = true
                 else
-                    -- Look for gold nodes
                     local goldNodes = getGoldNodes(goldFarmRange)
                     table.sort(goldNodes, function(a, b) return a.dist < b.dist end)
                     
@@ -1618,15 +1753,12 @@ task.spawn(function()
                     end
                 end
             else
-                -- We're at an ice chunk, break it
                 if currentIceNode and currentIceNode.model.Parent then
-                    -- Find entity ID to break it
                     local entityId = currentIceNode.model:GetAttribute("EntityID")
                     if entityId then
                         swingTool({entityId})
                         task.wait(1)
                         
-                        -- Check for gold node
                         local goldNodes = getGoldNodes(20)
                         if #goldNodes > 0 then
                             safeTween(goldNodes[1].position + Vector3.new(0, 5, 0))
